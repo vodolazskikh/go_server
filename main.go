@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
+	"strconv"
 )
 
 // Human — это JSON-представление человека
@@ -15,14 +17,31 @@ type Human struct {
 }
 
 func main() {
-	http.HandleFunc("/", postHandler)
+	http.HandleFunc("/", getHelloPage)
 	http.HandleFunc("/user", getUser)
 	log.Println("Listening...")
 	http.ListenAndServe(":3000", nil)
 }
 
-func postHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello")
+func getHelloPage(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello world")
+}
+
+func getNameByAgeMock(age int) string {
+	name := "Сашка"
+	if age < 70 {
+		name = "Юрий"
+	}
+	if age < 50 {
+		name = "Оксана"
+	}
+	if age < 40 {
+		name = "Афанасий"
+	}
+	if age < 20 {
+		name = "Глебка"
+	}
+	return name
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +52,14 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	humans["0"] = oleg
 	humans["1"] = sashka
 	humans["2"] = petr
+
+	for i := 3; i < 1000; i++ {
+		age := rand.Intn(100)
+		ind := strconv.Itoa(i)
+		name := getNameByAgeMock(age)
+
+		humans[ind] = Human{name, age, "статус"}
+	}
 
 	keys, ok := r.URL.Query()["id"]
 
