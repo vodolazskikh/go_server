@@ -18,9 +18,19 @@ type Human struct {
 
 func main() {
 	http.HandleFunc("/", getHelloPage)
-	http.HandleFunc("/user", getUser)
+	http.HandleFunc("/user", handleUserReq)
 	log.Println("Listening...")
 	http.ListenAndServe(":3000", nil)
+}
+
+func handleUserReq(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		getUser(w, r)
+	}
+
+	if r.Method == "POST" {
+		postUser(w, r)
+	}
 }
 
 func getHelloPage(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +87,42 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	}
 	json, err := json.Marshal(response)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(json)
+}
+
+func postUser(w http.ResponseWriter, r *http.Request) {
+
+	namesSlugs, nameOk := r.URL.Query()["name"]
+	ageSlugs, ageOk := r.URL.Query()["age"]
+	statusSlugs, statusOk := r.URL.Query()["status"]
+	fmt.Println(namesSlugs)
+	if !nameOk || len(namesSlugs[0]) < 1 {
+		log.Println("Url Param 'name' is missing")
+		return
+	}
+
+	if !ageOk || len(ageSlugs[0]) < 1 {
+		log.Println("Url Param 'age' is missing")
+		return
+	}
+
+	if !statusOk || len(statusSlugs[0]) < 1 {
+		log.Println("Url Param 'status' is missing")
+		return
+	}
+
+	name := namesSlugs[0]
+	age, _ := strconv.Atoi(ageSlugs[0])
+	status := statusSlugs[0]
+	newUser := Human{name, age, status}
+	json, err := json.Marshal(newUser)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
