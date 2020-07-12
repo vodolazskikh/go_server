@@ -116,7 +116,6 @@ func getPlace(collection *mongo.Collection, w http.ResponseWriter, r *http.Reque
 	if !noCity {
 		filter := bson.D{primitive.E{Key: "city", Value: keysCity[0]}}
 		options := options.Find()
-		options.SetLimit(2)
 
 		var results []*Place
 		cur, err := collection.Find(context.TODO(), filter, options)
