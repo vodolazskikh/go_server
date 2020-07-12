@@ -7,8 +7,8 @@ import (
 	"net/http"
 )
 
-// Response — это JSON-представление сообщения
-type Response struct {
+// Human — это JSON-представление человека
+type Human struct {
 	Name   string `json:"name"`
 	Age    int    `json:"age"`
 	Status string `json:"status"`
@@ -16,7 +16,7 @@ type Response struct {
 
 func main() {
 	http.HandleFunc("/", postHandler)
-	http.HandleFunc("/hi", getHi)
+	http.HandleFunc("/user", getUser)
 	log.Println("Listening...")
 	http.ListenAndServe(":3000", nil)
 }
@@ -25,31 +25,37 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello")
 }
 
-func getHi(w http.ResponseWriter, r *http.Request) {
-	keys, ok := r.URL.Query()["name"]
+func getUser(w http.ResponseWriter, r *http.Request) {
+	oleg := Human{"Олег", 30, "хороший чувак"}
+	sashka := Human{"Сашка", 24, "хороший чувак"}
+	petr := Human{"Петр", 12, "поросенок"}
+	humans := make(map[string]Human)
+	humans["0"] = oleg
+	humans["1"] = sashka
+	humans["2"] = petr
+
+	keys, ok := r.URL.Query()["id"]
 
 	if !ok || len(keys[0]) < 1 {
-		log.Println("Url Param 'name' is missing")
+		log.Println("Url Param 'id' is missing")
 		return
 	}
 
-	name := keys[0]
+	finedUser, isFined := humans[keys[0]]
 
-	age := 18
+	response := finedUser
+	if !isFined {
 
-	status := "Хороший человек"
-
-	if name == "Артём" {
-		age = 29
-		status = "Пёс"
+		http.Error(w, "Нет такого юзера", http.StatusNotFound)
 
 	}
+	json, err := json.Marshal(response)
 
-	response := Response{
-		Name:   name,
-		Age:    age,
-		Status: status,
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	kek, _ := json.Marshal(response)
-	w.Write(kek)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(json)
 }
