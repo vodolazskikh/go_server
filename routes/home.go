@@ -7,5 +7,5 @@ import (
 
 // HomeRoute - главный роут
 func HomeRoute(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello world")
+	fmt.Fprintf(w, "Уточните ваш запрос")
 }

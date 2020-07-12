@@ -26,6 +26,7 @@ type Food struct {
 	ID     string   `json:"id"`
 	Title  string   `json:"title"`
 	Places []string `json:"places"`
+	City   string   `json:"city"`
 }
 
 func init() {
@@ -82,30 +83,74 @@ func FoodRoute(w http.ResponseWriter, r *http.Request) {
 
 func getFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["id"]
+	cityKeys, cityOk := r.URL.Query()["city"]
 
-	if !ok || len(keys[0]) < 1 {
-		log.Println("Url Param 'id' is missing")
+	noID := !ok || len(keys[0]) < 1
+	noCity := !cityOk || len(cityKeys[0]) < 1
+
+	if noID && noCity {
+		log.Println("Url Param 'id' and 'city' is missing")
 		return
 	}
 
-	filter := bson.D{primitive.E{Key: "id", Value: keys[0]}}
+	if !noID {
+		filter := bson.D{primitive.E{Key: "id", Value: keys[0]}}
+		var result Food
+		err := collection.FindOne(context.TODO(), filter).Decode(&result)
 
-	var result Food
-	err := collection.FindOne(context.TODO(), filter).Decode(&result)
+		if err != nil {
+			http.Error(w, "Нет такого блюда", http.StatusNotFound)
+		}
 
-	if err != nil {
-		http.Error(w, "Нет такого блюда", http.StatusNotFound)
+		json, err := json.Marshal(result)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(json)
 	}
+	if !noCity {
+		filter := bson.D{primitive.E{Key: "city", Value: cityKeys[0]}}
+		options := options.Find()
 
-	json, err := json.Marshal(result)
+		var results []*Food
+		cur, err := collection.Find(context.TODO(), filter, options)
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		for cur.Next(context.TODO()) {
+
+			// create a value into which the single document can be decoded
+			var elem Food
+			err := cur.Decode(&elem)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			results = append(results, &elem)
+		}
+
+		if err := cur.Err(); err != nil {
+			log.Fatal(err)
+		}
+
+		// Close the cursor once finished
+		cur.Close(context.TODO())
+
+		if err != nil {
+			http.Error(w, "В этом городе нет еды", http.StatusNotFound)
+		}
+
+		json, err := json.Marshal(results)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(json)
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(json)
 }
 
 func patchFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
@@ -157,6 +202,7 @@ func patchFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 func postFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
 	titleSlugs, titleOk := r.URL.Query()["title"]
 	placeSlugs, placeOk := r.URL.Query()["place"]
+	citySlugs, cityOk := r.URL.Query()["city"]
 
 	if !titleOk || len(titleSlugs[0]) < 1 {
 		log.Println("Url Param 'title' is missing")
@@ -168,11 +214,17 @@ func postFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if !cityOk || len(citySlugs[0]) < 1 {
+		log.Println("Url Param 'city' is missing")
+		return
+	}
+
 	id := utils.GenerateUUID()
 	var placeArr []string
 	newAr := append(placeArr, placeSlugs[0])
 	title := titleSlugs[0]
-	newFood := Food{id, title, newAr}
+	city := citySlugs[0]
+	newFood := Food{id, title, newAr, city}
 	json, err := json.Marshal(newFood)
 
 	if err != nil {
