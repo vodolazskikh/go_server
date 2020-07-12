@@ -1,65 +1,86 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
+	"time"
+
+	"github.com/joho/godotenv"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
-// Human — это JSON-представление человека
-type Human struct {
-	Name   string `json:"name"`
-	Age    int    `json:"age"`
-	Status string `json:"status"`
+// User — так будем хранить JSON юзера в БД
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+	City string `json:"city"`
+}
+
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Print("No .env file found")
+	}
 }
 
 // UserRoute - роут для get/post пользователя
 func UserRoute(w http.ResponseWriter, r *http.Request) {
+
+	username, _ := os.LookupEnv("DB_USER")
+
+	password, _ := os.LookupEnv("DB_PASSWORD")
+
+	clusterAddress, _ := os.LookupEnv("DB_ADDRESS")
+
+	uriStrings := []string{"mongodb+srv://", username, ":", password, "@", clusterAddress, "/test?w=majority"}
+	uri := strings.Join(uriStrings, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	if err != nil {
+		panic(err)
+	}
+
+	defer func() {
+		if err = client.Disconnect(ctx); err != nil {
+			panic(err)
+		}
+	}()
+
+	if err := client.Ping(ctx, readpref.Primary()); err != nil {
+		panic(err)
+	}
+
+	usersCollection := client.Database("test").Collection("users")
+
 	if r.Method == "GET" {
 		getUser(w, r)
 	}
 
 	if r.Method == "POST" {
-		postUser(w, r)
+		postUser(usersCollection, w, r)
 	}
-}
 
-func getNameByAgeMock(age int) string {
-	name := "Сашка"
-	if age < 70 {
-		name = "Юрий"
-	}
-	if age < 50 {
-		name = "Оксана"
-	}
-	if age < 40 {
-		name = "Афанасий"
-	}
-	if age < 20 {
-		name = "Глебка"
-	}
-	return name
 }
 
 func getUser(w http.ResponseWriter, r *http.Request) {
-	oleg := Human{"Олег", 30, "хороший чувак"}
-	sashka := Human{"Сашка", 24, "хороший чувак"}
-	petr := Human{"Петр", 12, "поросенок"}
-	humans := make(map[string]Human)
+	oleg := User{"Олег", 30, "СПб"}
+	sashka := User{"Сашка", 24, "Москва"}
+	petr := User{"Петр", 18, "Таганрог"}
+	humans := make(map[string]User)
 	humans["0"] = oleg
 	humans["1"] = sashka
 	humans["2"] = petr
-
-	for i := 3; i < 1000; i++ {
-		age := rand.Intn(100)
-		ind := strconv.Itoa(i)
-		name := getNameByAgeMock(age)
-
-		humans[ind] = Human{name, age, "статус"}
-	}
 
 	keys, ok := r.URL.Query()["id"]
 
@@ -87,12 +108,11 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 	w.Write(json)
 }
 
-func postUser(w http.ResponseWriter, r *http.Request) {
+func postUser(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
 
 	namesSlugs, nameOk := r.URL.Query()["name"]
 	ageSlugs, ageOk := r.URL.Query()["age"]
-	statusSlugs, statusOk := r.URL.Query()["status"]
-	fmt.Println(namesSlugs)
+	citySlugs, cityOk := r.URL.Query()["city"]
 	if !nameOk || len(namesSlugs[0]) < 1 {
 		log.Println("Url Param 'name' is missing")
 		return
@@ -103,21 +123,28 @@ func postUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !statusOk || len(statusSlugs[0]) < 1 {
-		log.Println("Url Param 'status' is missing")
+	if !cityOk || len(citySlugs[0]) < 1 {
+		log.Println("Url Param 'city' is missing")
 		return
 	}
 
 	name := namesSlugs[0]
 	age, _ := strconv.Atoi(ageSlugs[0])
-	status := statusSlugs[0]
-	newUser := Human{name, age, status}
+	city := citySlugs[0]
+	newUser := User{name, age, city}
 	json, err := json.Marshal(newUser)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	insertResult, err := collection.InsertOne(context.TODO(), newUser)
+
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(insertResult.InsertedID)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(json)
