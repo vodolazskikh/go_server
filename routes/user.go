@@ -13,6 +13,10 @@ import (
 
 	"github.com/joho/godotenv"
 
+	"3foodServer/utils"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -20,9 +24,11 @@ import (
 
 // User — так будем хранить JSON юзера в БД
 type User struct {
-	Name string `json:"name"`
-	Age  int    `json:"age"`
-	City string `json:"city"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Age   int    `json:"age"`
+	City  string `json:"city"`
+	Email string `json:"email"`
 }
 
 func init() {
@@ -64,7 +70,7 @@ func UserRoute(w http.ResponseWriter, r *http.Request) {
 	usersCollection := client.Database("test").Collection("users")
 
 	if r.Method == "GET" {
-		getUser(w, r)
+		getUser(usersCollection, w, r)
 	}
 
 	if r.Method == "POST" {
@@ -73,15 +79,7 @@ func UserRoute(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getUser(w http.ResponseWriter, r *http.Request) {
-	oleg := User{"Олег", 30, "СПб"}
-	sashka := User{"Сашка", 24, "Москва"}
-	petr := User{"Петр", 18, "Таганрог"}
-	humans := make(map[string]User)
-	humans["0"] = oleg
-	humans["1"] = sashka
-	humans["2"] = petr
-
+func getUser(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["id"]
 
 	if !ok || len(keys[0]) < 1 {
@@ -89,15 +87,18 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	finedUser, isFined := humans[keys[0]]
+	filter := bson.D{primitive.E{Key: "id", Value: keys[0]}}
 
-	response := finedUser
-	if !isFined {
+	var result User
+	err := collection.FindOne(context.TODO(), filter).Decode(&result)
 
+	fmt.Println(result)
+
+	if err != nil {
 		http.Error(w, "Нет такого юзера", http.StatusNotFound)
-
 	}
-	json, err := json.Marshal(response)
+
+	json, err := json.Marshal(result)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -109,10 +110,11 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func postUser(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
-
 	namesSlugs, nameOk := r.URL.Query()["name"]
 	ageSlugs, ageOk := r.URL.Query()["age"]
 	citySlugs, cityOk := r.URL.Query()["city"]
+	emailSlugs, emailOk := r.URL.Query()["email"]
+
 	if !nameOk || len(namesSlugs[0]) < 1 {
 		log.Println("Url Param 'name' is missing")
 		return
@@ -128,10 +130,17 @@ func postUser(collection *mongo.Collection, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	if !emailOk || len(emailSlugs[0]) < 1 {
+		log.Println("Url Param 'email' is missing")
+		return
+	}
+
+	id := utils.GenerateUUID()
 	name := namesSlugs[0]
 	age, _ := strconv.Atoi(ageSlugs[0])
 	city := citySlugs[0]
-	newUser := User{name, age, city}
+	email := emailSlugs[0]
+	newUser := User{id, name, age, city, email}
 	json, err := json.Marshal(newUser)
 
 	if err != nil {
