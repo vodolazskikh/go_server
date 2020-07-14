@@ -84,11 +84,13 @@ func FoodRoute(w http.ResponseWriter, r *http.Request) {
 func getFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
 	keys, ok := r.URL.Query()["id"]
 	cityKeys, cityOk := r.URL.Query()["city"]
+	nameKeys, nameOk := r.URL.Query()["name"]
 
 	noID := !ok || len(keys[0]) < 1
 	noCity := !cityOk || len(cityKeys[0]) < 1
+	noName := !nameOk || len(nameKeys[0]) < 1
 
-	if noID && noCity {
+	if noID && noCity && noName {
 		log.Println("Url Param 'id' and 'city' is missing")
 		return
 	}
@@ -109,11 +111,71 @@ func getFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Reques
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Write(json)
 	}
+
+	if !noName {
+		name := nameKeys[0]
+
+		filterTitle := bson.D{primitive.E{Key: "title", Value: bson.D{
+			primitive.E{Key: "$regex", Value: primitive.Regex{Pattern: name + ".*", Options: "i"}},
+		}}}
+
+		options := options.Find()
+
+		var results []*Food
+		cur, err := collection.Find(context.TODO(), filterTitle, options)
+
+		for cur.Next(context.TODO()) {
+
+			// create a value into which the single document can be decoded
+			var elem Food
+			err := cur.Decode(&elem)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			results = append(results, &elem)
+		}
+
+		if err := cur.Err(); err != nil {
+			log.Fatal(err)
+		}
+
+		// Close the cursor once finished
+		cur.Close(context.TODO())
+
+		if err != nil {
+			http.Error(w, "Нет блюд с таким названием", http.StatusNotFound)
+		}
+
+		json, err := json.Marshal(results)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Write(json)
+	}
+
 	if !noCity {
-		filter := bson.D{primitive.E{Key: "city", Value: cityKeys[0]}}
+		cityCode := cityKeys[0]
+
+		// TODO поддержку cityCode
+		city := "Новосибирск"
+		if cityCode == "1" {
+			city = "Новосибирск"
+		}
+		filter := bson.D{primitive.E{Key: "city", Value: city}}
 		options := options.Find()
 
 		var results []*Food
@@ -148,7 +210,11 @@ func getFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Reques
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Write(json)
 	}
 }
@@ -200,6 +266,7 @@ func patchFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 }
 
 func postFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Request) {
+	fmt.Println(r.URL.Query())
 	titleSlugs, titleOk := r.URL.Query()["title"]
 	placeSlugs, placeOk := r.URL.Query()["place"]
 	citySlugs, cityOk := r.URL.Query()["city"]
@@ -223,7 +290,13 @@ func postFood(collection *mongo.Collection, w http.ResponseWriter, r *http.Reque
 	var placeArr []string
 	newAr := append(placeArr, placeSlugs[0])
 	title := titleSlugs[0]
-	city := citySlugs[0]
+	cityCode := citySlugs[0]
+
+	// TODO поддержку cityCode
+	city := "Новосибирск"
+	if cityCode == "1" {
+		city = "Новосибирск"
+	}
 	newFood := Food{id, title, newAr, city}
 	json, err := json.Marshal(newFood)
 

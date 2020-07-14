@@ -5,14 +5,19 @@ import (
 	"net/http"
 
 	"3foodServer/routes"
+
+	"github.com/rs/cors"
 )
 
 func main() {
-	http.HandleFunc("/", routes.HomeRoute)
-	http.HandleFunc("/user", routes.UserRoute)
-	http.HandleFunc("/place", routes.PlaceRoute)
-	http.HandleFunc("/reviews", routes.ReviewsRoute)
-	http.HandleFunc("/food", routes.FoodRoute)
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/food", routes.FoodRoute)
+	mux.HandleFunc("/", routes.HomeRoute)
+	mux.HandleFunc("/user", routes.UserRoute)
+	mux.HandleFunc("/place", routes.PlaceRoute)
+	mux.HandleFunc("/reviews", routes.ReviewsRoute)
 	log.Println("Listening...")
-	http.ListenAndServe(":3000", nil)
+	handler := cors.AllowAll().Handler(mux)
+	http.ListenAndServe(":3000", handler)
 }

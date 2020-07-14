@@ -32,6 +32,11 @@ type Review struct {
 	FoodID  string `json:"foodId"`
 }
 
+// Empty — пустой результат
+type Empty struct {
+	IsEmpty bool `json:"isEmpty"`
+}
+
 func init() {
 	if err := godotenv.Load(); err != nil {
 		log.Print("No .env file found")
@@ -213,9 +218,9 @@ func getReview(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 
 			// create a value into which the single document can be decoded
 			var elem Review
-			err := cur.Decode(&elem)
-			if err != nil {
-				log.Fatal(err)
+			error := cur.Decode(&elem)
+			if error != nil {
+				log.Fatal(error)
 			}
 
 			results = append(results, &elem)
@@ -224,7 +229,6 @@ func getReview(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 		if err := cur.Err(); err != nil {
 			log.Fatal(err)
 		}
-
 		// Close the cursor once finished
 		cur.Close(context.TODO())
 
@@ -232,6 +236,13 @@ func getReview(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 			http.Error(w, "У блюда нет отзывов", http.StatusNotFound)
 		}
 
+		if len(results) == 0 {
+			k := make([]*Review, 0)
+			empty, _ := json.Marshal(k)
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(empty)
+			return
+		}
 		json, err := json.Marshal(results)
 
 		if err != nil {

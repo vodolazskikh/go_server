@@ -24,10 +24,11 @@ import (
 
 // Place — так будем хранить JSON заведения в БД
 type Place struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Rating int    `json:"rating"`
-	City   string `json:"city"`
+	ID     string    `json:"id"`
+	Name   string    `json:"name"`
+	Rating int       `json:"rating"`
+	City   string    `json:"city"`
+	Food   *[]string `json:"food"`
 }
 
 func init() {
@@ -178,7 +179,7 @@ func postPlace(collection *mongo.Collection, w http.ResponseWriter, r *http.Requ
 	name := nameSlugs[0]
 	rating, _ := strconv.Atoi(ratingSlug[0])
 	city := citySlugs[0]
-	newPlace := Place{id, name, rating, city}
+	newPlace := Place{id, name, rating, city, nil}
 	json, err := json.Marshal(newPlace)
 
 	if err != nil {
